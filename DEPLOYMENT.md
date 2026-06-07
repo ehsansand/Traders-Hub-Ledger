@@ -1,119 +1,94 @@
-# 🚀 راهنمای جامع تولیدی کردن و استقرار برنامه (Deployment & Production Guide)
+# 🚀 راهنمای جامع استقرار در کلادفلر پیجز (Cloudflare Pages Deployment Guide)
 
-این پروژه برای دفتر کل حسابداری مدرن و اتومات تریدرز هاب پرو (**Traders Hub Ledger PRO**) بهینه شده و آماده‌ی آپلود در ریپازیتوری **GitHub** و استقرار (Deploy) روی **Cloudflare Pages** (یا هر سرویس استاتیک مشابهی مانند GitHub Pages و Vercel) می‌باشد.
+خبر فوق‌العاده! پروژه شما به گونه‌ای طراحی شده است که **نیازی به هاست مجزای بک‌اند (مانند Render یا Railway) ندارد**. 
+با استفاده از قابلیت **Cloudflare Pages Functions**، کدهای بک‌اند هوش مصنوعی درون پوشه `/functions` و فرانت‌اند درون پوشه `src` به طور همزمان و کاملاً رایگان درون شبکه جهانی کلادفلر مستقر و اجرا می‌شوند.
 
 ---
 
-## 💻 بخش اول: آپلود پروژه در گیت‌هاب (Pushing to GitHub)
+## 💻 بخش اول: آپلود یا بروزرسانی پروژه در گیت‌هاب (Pushing to GitHub)
 
-برای ارسال کدهای خود به گیت‌هاب، مراحل استاندارد زیر را دنبال کنید:
+برای ارسال کدهای اصلاح‌شده به گیت‌هاب، مراحل زیر را در ترمینال روت پروژه انجام دهید:
 
-1. وارد حساب کاربر خود در [GitHub](https://github.com) شده و یک ریپازیتوری خالی جدید (ترجیحاً Private جهت امنیت اطلاعات فایربیس و کانفیگ‌ها) بسازید.
-2. ترمینال خود را در روت پروژه باز کنید و دستورات زیر را وارد نمایید:
+1. وارد حساب کاربری خود در [GitHub](https://github.com) شده و یک ریپازیتوری خالی بسازید (ترجیحاً Private).
+2. دستورات زیر را وارد کنید تا کدهای شما به گیت‌هاب فرستاده شوند:
 
 ```bash
-# مقداردهی اولیه گیت
+# مقداردهی اولیه گیت (اگر از قبل انجام نداده‌اید)
 git init
 
-# اضافه کردن تمام فایل‌ها به گیت (مسیر فایل‌های حساس در gitignore. مسدود است)
+# ثبت همه تغییرات (فایل نامبروان wrangler.jsonc و پوشه functions نیز اضافه می‌شوند)
 git add .
 
-# ایجاد کامیت اولیه با پیام مناسب
-git commit -m "Initialize Traders Hub Ledger with Auto-Device Detection and Cloudflare-compatible dynamic endpoints"
+# ایجاد کامیت جدید
+git commit -m "Configure high-performance Cloudflare Pages Functions and update wrangler config"
 
-# اتصال به برنچ پیش‌فرض اصلی
+# تنظیم برنچ اصلی
 git branch -M main
 
-# اتصال ریپازیتوری لوکال شما به گیت‌هاب (آدرس به جای URL فرضی شما قرار گیرد)
+# اتصال به ریپازیتوری شما (اگر قبلاً متصل نکرده‌اید)
 git remote add origin https://github.com/YOUR_ACCOUNT/YOUR_REPO_NAME.git
 
-# پوش کردن کدها به ریپازیتوری گیت‌هاب
+# پوش کردن تغییرات به برنچ اصلی
 git push -u origin main
 ```
 
 ---
 
-## 🌐 بخش دوم: معماری استقرار دوگانه (Dual-Deployment Architecture)
+## 🌐 بخش دوم: راه‌اندازی و استقرار در Cloudflare Pages
 
-از آنجایی که برنامه حاوی هوش محاسباتی **Gemini** است که کلیدهای API آن به دلایل امنیت نباید در مروگر افشا شوند، برنامه از معماری فول‌استک سرور + کلاینت استفاده می‌کند:
-*   **کلاینت (Frontend):** کدهای React که فایل‌های استاتیک آن را روی **Cloudflare Pages** یا **GitHub Pages** میزبانی می‌کنید.
-*   **سرور (Backend):** کدهای Express سرور (`server.ts`) که آن را روی یک هاست کانتینری مانند **Cloud Run**، **Render**، **Railway** یا **Fly.io** میزبانی می‌کنید.
+حالا کافیست کلادفلر را به ریپازیتوری خود متصل کنید:
 
----
-
-### ۱. استقرار فرانت‌اند در کلادفلر (Deploying Frontend on Cloudflare Pages)
-
-کلادفلر پورتال فوق‌العاده سریع و رایگانی برای فایل‌های استاتیک Vite فراهم می‌کند. برای بالا آوردن فرانت‌اند:
-
-1. وارد پنل اختصاصی **Cloudflare** شده و به بخش **Pages** (یا Workers & Pages) بروید.
-2. روی دکمه‌ی **Connect to Git** کلیک کنید و ریپازیتوری گیت‌هاب این پروژه را انتخاب نمایید.
-3. در کادرهای پیکربندی بیلد موارد زیر را وارد کنید:
-    *   **Framework Preset:** گزینه `Vite` یا `None` را انتخاب کنید.
-    *   **Build Command:** دستور `npm run build` را قرار دهید.
-    *   **Build Output Directory:** پوشه `dist` را قرار دهید.
-4. در بخش کانفیگ دکمه‌ی متغیرهای محیطی (**Environment Variables**)، متغیر زیر را اضافه کنید تا فرانت‌اند بداند درخواست‌های هوش مصنوعی را به کدام آدرس ارسال کند:
-    *   مقدار کلیدی: `VITE_API_URL`
-    *   مقدار عددی: آدرس دامنه‌ی سرور بک‌اند شما (مثال: `https://tradershub-api.onrender.com`)
-5. روی دکمه‌ی **Save and Deploy** کلیک کنید. کلادفلر فوراً برنامه را کامپایل کرده و دامنه‌ای با فرمت زیر به شما تقدیم می‌کند:
-    `https://YOUR_APP.pages.dev`
-
----
-
-### ۲. استقرار بک‌اند (Deploying Backend Container)
-
-برای اینکه تحلیلگر هوش مصنوعی Gemini و رادار واریزی شما بدون مشکل کار کنند، فایل `server.ts` را روی یکی از هاست‌های بک‌اند ابری بالا بیاورید:
-
-#### راهکار اول: Render.com (بسیار ساده و رایگان)
-1. در پنل [Render](https://render.com) یک **Web Service** از اتصال گیت‌هاب بسازید.
-2. فیلدهای بیلد و اجرا را مقداردهی نمایید:
-    *   **Runtime:** گزینه `Node`
-    *   **Build Command:** دستور `npm install && npm run build`
-    *   **Start Command:** دستور `npm start`
-3. در تب **Environment Variables**، مقدار زیر را تنظیم کنید:
-    *   `GEMINI_API_KEY`: مقدار توکن امنیتی دریافتی شما از گوگل ای‌آی استودیو.
+1. وارد پنل کاربری خود در [Cloudflare](https://dash.cloudflare.com) شوید.
+2. از منوی سمت چپ به بخش **Workers & Pages** بروید.
+3. روی دکمه‌ی **Create** کلیک کرده و تب **Pages** را انتخاب کنید. سپس روی **Connect to Git** بزنید.
+4. ریپازیتوری گیت‌هاب جدید خود را انتخاب نمایید.
+5. در بخش تنظیمات بیلد (**Build settings**)، موارد زیر را دقیقاً تنظیم فرمایید:
+    *   **Project Name:** مقدار `traders-hub-ledger` (همانطور که در فایل `wrangler.jsonc` نوشته‌ایم).
+    *   **Production branch:** مقدار `main`
+    *   **Framework Preset:** گزینه **Vite** را انتخاب کنید (اگر نبود، روی `None` بگذارید).
+    *   **Build command:** مقدار `npm run build`
+    *   **Build output directory:** مقدار `dist`
+    *   **Compatibility date:** مقدار `2024-01-01`
+6. **تنظیم کلید هوش مصنوعی (بسیار مهم):**
+    *   در همان صفحه یا بعد از ساخت پروژه به تب **Settings** > **Environment variables** بروید.
+    *   یک متغیر محیطی (Environment Variable) جدید تحت عنوان زیر بسازید:
+        *   **Variable Name (نام متغیر):** `GEMINI_API_KEY`
+        *   **Value (مقدار):** کلید API هوش مصنوعی خود را در آن وارد کنید.
+    *   *نکته:* متغیر `VITE_API_URL` را خالی بگذارید تا فرانت‌اند به طور خودکار به سرورلس‌های داخلی خودِ کلادفلر متصل شود.
+7. روی دکمه‌ی **Save and Deploy** کلیک فرمایید. کلادفلر در کمتر از ۲ دقیقه کل پروژه را بیلد و آدرس اختصاصی شما را با فرمت زیر تحویل می‌دهد:
+    `https://traders-hub-ledger.pages.dev`
 
 ---
 
-## 🔒 بخش سوم: حل دائمی مشکلات لاگین گوگل (Firebase Domain Authorization)
+## 🔒 بخش سوم: حل مشکل لاگین گوگل در فایربیس (Firebase Authorized Domains)
 
-یکی از رایج‌ترین علت‌های از کار افتادن ورود امن با گوگل در محیط‌های توزیع شده، مسدود شدن دامنه توسط دیوار امنیتی فایربیس (Firebase OAuth Safe List) است. برای رفع فوری این مشکل:
+اگر از ورود به سیستم با گوگل فایربیس استفاده می‌کنید، برای رفع خطاهای احراز هویت دامین:
 
-1. به [Firebase Console](https://console.firebase.google.com) پروژه خود مراجعه فرمایید.
-2. از منوی سمت چپ به بخش **Authentication** وارد شده و تب **Settings** را باز کنید.
-3. در منوی فرعی روی منوی **Authorized domains** کلیک نمایید.
-4. دکمه‌ی **Add domain** را بزنید و آدرس دامنه‌ی کلادفلر فرانت‌اند خود را اضافه نمایید:
-    *   مثال: `YOUR_APP.pages.dev` (بدون `https://` و اسلش پایانی).
-5. همچنین مطمئن شوید در بخش تنظیمات **Google Cloud Console** در تب Credentials، این دامنه‌ها را به لیست مجاز ورود اضافه کرده‌اید.
+1. به [Firebase Console](https://console.firebase.google.com) پروژه خود بروید.
+2. از منوی چپ به بخش **Authentication** رفته و تب **Settings** را باز کنید.
+3. در کادر زیرین روی **Authorized domains** کلیک فرمایید.
+4. دکمه‌ی **Add domain** را بزنید و دامنه‌ی کلادفلر خود را بدون `https://` اضافه کنید:
+    *   به عنوان مثال: `traders-hub-ledger.pages.dev`
+5. همچنین مطمئن شوید که این آدرس را به لیست مجاز ورود در تنظیمات شناسه‌های Google Cloud Console نیز اضافه کرده‌اید.
 
 ---
 
-# 🚀 English: Production Deployment Guide
+# 🚀 English Summary: Steps to Deploy
 
-## 💻 1. Push to GitHub
-1. Create a new private reservoir repository on [GitHub](https://github.com).
-2. Execute the following CLI commands inside your workspace directory:
-```bash
-git init
-git add .
-git commit -m "Configure production builds and automatic device selectors"
-git branch -M main
-git remote add origin https://github.com/YOUR_ACCOUNT/YOUR_REPO_NAME.git
-git push -u origin main
-```
-
-## 🌐 2. Hosting Configuration
-
-### 🚀 Static Frontend (Cloudflare Pages)
-- **Framework Preset**: `Vite` (or build static html options)
-- **Build Command**: `npm run build`
-- **Output Directory**: `dist`
-- **Environment Variables**: Add `VITE_API_URL` pointing to your deployed backend domain (e.g. `https://tradershub-backend.onrender.com`).
-
-### 📦 Server Backend (Render, Railway, or Google Cloud Run)
-- **Engine**: Node.js CJS/ESM
-- **Build Scripts**: `npm install && npm run build`
-- **Start Command**: `npm start`
-- **Environment Variables**: Provide `GEMINI_API_KEY` under backend secrets to execute analysis calls safely.
-
-### 🔒 3. Fix Google Auth Domain Failures
-To prevent unauthorized redirect issues, always remember to add your production Cloudflare App domain (e.g., `YOUR_APP.pages.dev`) directly inside the **Authorized Domains** list of your **Firebase Console under Authentication -> Settings**.
+1. **Commit and Push to GitHub**:
+   Ensure `wrangler.jsonc` has `"name": "traders-hub-ledger"` and the `/functions` directory is included in your commit. Run:
+   ```bash
+   git add .
+   git commit -m "Deploy serverless backend & single CF Pages setup"
+   git push
+   ```
+2. **Setup Cloudflare Pages**:
+   - Go to Cloudflare Dashboard -> **Workers & Pages** -> **Create** -> **Pages** -> **Connect to Git**.
+   - Input **Project Name** as `traders-hub-ledger`.
+   - **Framework Preset**: `Vite` (Build command: `npm run build`, Output directory: `dist`).
+3. **Configure API Secrets**:
+   - In Cloudflare Pages Project -> **Settings** -> **Environment variables**.
+   - Add variable: `GEMINI_API_KEY` with your API token as value.
+   - Leave `VITE_API_URL` empty, it will auto-resolve locally on the same domain.
+4. **Firebase Setup**:
+   - Add your `.pages.dev` custom domain to **Authorized Domains** in your **Firebase Console under Authentication -> Settings**.
