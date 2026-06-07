@@ -1,18 +1,17 @@
 export async function onRequestPost({ request, env }: { request: Request; env: any }) {
   try {
-    const apiKey = env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return new Response(
-        JSON.stringify({
-          error: "کلید API مربوط به هوش مصنوعی (GEMINI_API_KEY) در سرور کلادفلر تنظیم نشده است. لطفاً آن را در بخش Settings > Environment Variables پنل Cloudflare اضافه کنید."
-        }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    const { dataText } = await request.json();
+    const { dataText } = await request.json().catch(() => ({ dataText: "" }));
     if (!dataText || typeof dataText !== "string") {
       return new Response(JSON.stringify({ error: "محتوای متنی ارسال شده معتبر نیست." }), { status: 400, headers: { "Content-Type": "application/json" } });
+    }
+
+    const apiKey = env.GEMINI_API_KEY;
+    if (!apiKey) {
+      // Smart offline fallback on the server side to protect user deployments against missing keys
+      const parsed = serverlessOfflineParseRecords(dataText);
+      return new Response(JSON.stringify(parsed), {
+        headers: { "Content-Type": "application/json; charset=utf-8" }
+      });
     }
 
     const systemInstruction = `You are "Traders Hub AI Record Processor". You are an expert financial ledger data parser.
@@ -118,3 +117,102 @@ Analyze the raw lines or tabular columns carefully. Mixed English and Persian is
     });
   }
 }
+
+function serverlessOfflineParseRecords(text: string) {
+  const rialEntries: any[] = [];
+  const cryptoEntries: any[] = [];
+
+  const faToEnNumbers = (str: string) => {
+    if (!str) return "";
+    const p = [/۰/g, /۱/g, /۲/g, /۳/g, /۴/g, /۵/g, /۶/g, /۷/g, /۸/g, /۹/g];
+    let res = str;
+    for (let i = 0; i < 10; i++) res = res.replace(p[i], String(i));
+    return res;
+  };
+
+  const lines = text.split(/\r?\n/);
+  for (let idx = 0; idx < lines.length; idx++) {
+    const line = lines[idx].trim();
+    if (!line || line.length < 5) continue;
+    const norm = faToEnNumbers(line).toLowerCase();
+
+    const isCrypto = /usdt|tether|btc|bitcoin|eth|ethereum|ton|sol|trx|doge|تتر/i.test(norm);
+    if (isCrypto) {
+      let coinName = "USDT";
+      if (/btc|bitcoin/i.test(norm)) coinName = "BTC";
+      else if (/eth|ethereum/i.test(norm)) coinName = "ETH";
+      else if (/ton/i.test(norm)) coinName = "TON";
+      else if (/sol/i.test(norm)) coinName = "SOL";
+      else if (/trx|tron/i.test(norm)) coinName = "TRX";
+
+      const isOut = /برداشت|withdraw|transfer|انتقال|out|فروش/i.test(norm);
+      let amount = 1.0;
+      const numMatches = norm.match(/[0-9]+(?:\.[0-9]+)?/g);
+      if (numMatches) {
+        for (const nm of numMatches) {
+          const v = parseFloat(nm);
+          if (v && v !== 1403 && v !== 2026 && v < 10000) { amount = v; break; }
+        }
+      }
+
+      let coinPrice = 1.0;
+      if (coinName === "BTC") coinPrice = 68000;
+      else if (coinName === "ETH") coinPrice = 3550;
+      else if (coinName === "TON") coinPrice = 7.4;
+      else if (coinName === "SOL") coinPrice = 160;
+
+      cryptoEntries.push({
+        date: new Date().toISOString().split("T")[0],
+        coinName,
+        amount,
+        coinPrice,
+        equivalentUsd: amount * coinPrice,
+        walletAddress: "",
+        network: "TRC-20",
+        type: isOut ? "out" : "in",
+        notes: line + " (پردازش آفلاین)"
+      });
+    } else {
+      let amount = 0;
+      const mil = norm.match(/(\d+(?:\.\d+)?)\s*(?:میلیون|mil|m)/);
+      if (mil) {
+        amount = parseFloat(mil[1]) * 1000000;
+      } else {
+        const numbers = norm.match(/\d+/g) || [];
+        for (const num of numbers) {
+          const v = parseInt(num, 10);
+          if (v > 1000) { amount = v; break; }
+        }
+      }
+
+      if (amount === 0) continue;
+
+      let bankName = "بانک ملت";
+      if (/سامان/i.test(norm)) bankName = "بانک سامان";
+      else if (/ملی/i.test(norm)) bankName = "بانک ملی";
+      else if (/پاسارگاد/i.test(norm)) bankName = "بانک پاسارگاد";
+
+      const isOut = /پرداخت|برداشت|انتقال|خرید|out/i.test(norm);
+
+      let receivedFrom = "نامشخص";
+      const words = line.split(/[\s,،؛]+/).filter(w => {
+        const cleanW = faToEnNumbers(w).replace(/[^a-zA-Zآ-ی0-9]/g, "");
+        return cleanW.length > 1 && !/^[0-9]+$/.test(cleanW) && !/تومان|ریال|میلیون|هزار|بانک|واریز|پرداخت|برداشت/.test(cleanW);
+      });
+      if (words.length > 0) {
+        receivedFrom = words.slice(0, 2).join(' ');
+      }
+
+      rialEntries.push({
+        date: new Date().toISOString().split("T")[0],
+        receivedFrom,
+        amount,
+        bankName,
+        type: isOut ? "out" : "in",
+        notes: line + " (پردازش آفلاین)"
+      });
+    }
+  }
+  return { rialEntries, cryptoEntries };
+}
+

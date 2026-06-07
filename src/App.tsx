@@ -48,6 +48,7 @@ import {
 import { User as FirebaseUser } from 'firebase/auth';
 
 import { RialEntry, CryptoEntry, SheetsSyncState } from './types';
+import { offlineParseRecords, offlineQueryLedger } from './offlineAI';
 import {
   findBackupFile,
   uploadBackupFile,
@@ -2631,9 +2632,10 @@ export default function App() {
 
       const data = await response.json();
       if (data.error) {
+        const offlineAnswer = offlineQueryLedger(queryToSubmit, rialEntries, cryptoEntries, lang);
         setAiHistory((prev) => [
           ...prev,
-          { sender: 'ai', text: `خطا در اجرای حسابرسی هوش مصنوعی: ${data.error}` }
+          { sender: 'ai', text: offlineAnswer }
         ]);
       } else {
         setAiHistory((prev) => [
@@ -2642,15 +2644,11 @@ export default function App() {
         ]);
       }
     } catch (err: any) {
-      console.error(err);
+      console.warn('AI Query failed, falling back to offline ledger calculator:', err);
+      const offlineAnswer = offlineQueryLedger(queryToSubmit, rialEntries, cryptoEntries, lang);
       setAiHistory((prev) => [
         ...prev,
-        {
-          sender: 'ai',
-          text: lang === 'fa' 
-            ? 'خطا در برقراری ارتباط با مدل هوش مصنوعی. لطفاً بررسی کنید که سرور ما به درستی فعال باشد یا کلید API آن درست ست شده باشد.'
-            : 'Unreachable server backend for AI Accountant. Ensure key configurations exist.'
-        }
+        { sender: 'ai', text: offlineAnswer }
       ]);
     } finally {
       setAiLoading(false);
@@ -2729,41 +2727,56 @@ export default function App() {
     setParsedCryptoResults([]);
 
     try {
-      const apiBase = import.meta.env.VITE_API_URL || '';
-      const response = await fetch(`${apiBase}/api/gemini/parse-records`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ dataText: pastedText }),
-      });
+      let rials: any[] = [];
+      let cryptos: any[] = [];
+      let usedOffline = false;
 
-      if (!response.ok) {
-        throw new Error(`Server returned status code ${response.status}`);
+      try {
+        const apiBase = import.meta.env.VITE_API_URL || '';
+        const response = await fetch(`${apiBase}/api/gemini/parse-records`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ dataText: pastedText }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Server returned status code ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (data.error) {
+          console.warn('Backend API reported error, using local offline parser:', data.error);
+          const offlineRes = offlineParseRecords(pastedText);
+          rials = offlineRes.rialEntries;
+          cryptos = offlineRes.cryptoEntries;
+          usedOffline = true;
+        } else {
+          rials = data.rialEntries || [];
+          cryptos = data.cryptoEntries || [];
+        }
+      } catch (err) {
+        console.warn('Network parse fetch fails, using local offline parser:', err);
+        const offlineRes = offlineParseRecords(pastedText);
+        rials = offlineRes.rialEntries;
+        cryptos = offlineRes.cryptoEntries;
+        usedOffline = true;
       }
-
-      const data = await response.json();
-      if (data.error) {
-        setParseError(data.error);
-        return;
-      }
-
-      const rawRials: any[] = data.rialEntries || [];
-      const rawCryptos: any[] = data.cryptoEntries || [];
 
       // Map raw items properly to official interface structure
-      const rials = rawRials.map((r, i) => ({
+      const mappedRials = rials.map((r, i) => ({
         id: `R-AI-${Math.floor(1000 + Math.random() * 9000)}-${i}`,
         date: r.date || new Date().toISOString().split('T')[0],
         receivedFrom: r.receivedFrom || 'نامشخص',
         amount: Number(r.amount) || 0,
         bankName: r.bankName || 'نامشخص',
-        notes: r.notes || 'پردازش شده با هوش مصنوعی',
+        notes: (r.notes || 'پردازش شده با لجر هوشمند') + (usedOffline ? ' (پردازش آفلاین)' : ''),
         createdAt: Date.now() + i,
         type: r.type || 'in',
       }));
 
-      const cryptos = rawCryptos.map((c, i) => ({
+      const mappedCryptos = cryptos.map((c, i) => ({
         id: `C-AI-${Math.floor(1000 + Math.random() * 9000)}-${i}`,
         date: c.date || new Date().toISOString().split('T')[0],
         coinName: (c.coinName || 'USDT').toUpperCase(),
@@ -2773,22 +2786,22 @@ export default function App() {
         walletAddress: c.walletAddress || '',
         network: (c.network || 'TRC-20').toUpperCase(),
         txHash: c.txHash || '',
-        notes: c.notes || 'پردازش شده با هوش مصنوعی',
+        notes: (c.notes || 'پردازش شده با لجر هوشمند') + (usedOffline ? ' (پردازش آفلاین)' : ''),
         createdAt: Date.now() + i,
         type: c.type || 'in',
       }));
 
-      if (rials.length === 0 && cryptos.length === 0) {
+      if (mappedRials.length === 0 && mappedCryptos.length === 0) {
         setParseError(lang === 'fa' 
           ? 'هیچ تراکنش معتبری در متن وارد شده یافت نشد. لطفاً مطمئن شوید متنی که فرستاده‌اید درست کپی شده باشد یا ستون‌های مناسب مایه داشته باشد.' 
           : 'No valid transactions detected. Make sure your input contains recognizable ledger numbers or details.');
       } else {
-        setParsedRialResults(rials);
-        setParsedCryptoResults(cryptos);
+        setParsedRialResults(mappedRials);
+        setParsedCryptoResults(mappedCryptos);
       }
     } catch (err: any) {
       console.error(err);
-      setParseError(lang === 'fa' ? `خطا در برقراری ارتباط با هوش مصنوعی: ${err.message}` : `AI communication error: ${err.message}`);
+      setParseError(lang === 'fa' ? `خطا در پردازش اطلاعات لجر: ${err.message}` : `AI processing error: ${err.message}`);
     } finally {
       setIsParsingText(false);
     }
