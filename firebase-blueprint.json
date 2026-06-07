@@ -1,0 +1,65 @@
+{
+  "entities": {
+    "RialEntry": {
+      "title": "Rial Transaction Entry",
+      "description": "Represents a physical Iranian Rial transaction log",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique record identifier" },
+        "date": { "type": "string", "format": "date", "description": "Transaction date" },
+        "receivedFrom": { "type": "string", "description": "Sender or receiver name" },
+        "amount": { "type": "number", "description": "Transaction amount in Toman" },
+        "bankName": { "type": "string", "description": "Name of Iranian bank" },
+        "notes": { "type": "string", "description": "Optional notes or details" },
+        "createdAt": { "type": "integer", "description": "Creation timestamp" },
+        "type": { "type": "string", "enum": ["in", "out"], "description": "Transaction type (inflow or outflow)" }
+      },
+      "required": ["id", "date", "receivedFrom", "amount", "bankName", "createdAt"]
+    },
+    "CryptoEntry": {
+      "title": "Crypto Transaction Entry",
+      "description": "Represents a physical Cryptocurrency transaction log",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique record identifier" },
+        "date": { "type": "string", "format": "date", "description": "Transaction date" },
+        "coinName": { "type": "string", "description": "Cryptocurrency symbol (e.g. USDT, BTC)" },
+        "amount": { "type": "number", "description": "Amount of cryptocurrency" },
+        "coinPrice": { "type": "number", "description": "USD price of coin at transaction time" },
+        "equivalentUsd": { "type": "number", "description": "Equivalent USD value" },
+        "walletAddress": { "type": "string", "description": "Target address or destination" },
+        "network": { "type": "string", "description": "Blockchain network (e.g. TRC20, ERC20)" },
+        "txHash": { "type": "string", "description": "Blockchain transaction hash identifier" },
+        "notes": { "type": "string", "description": "Optional details or notes" },
+        "createdAt": { "type": "integer", "description": "Creation timestamp" },
+        "type": { "type": "string", "enum": ["in", "out"], "description": "Transaction direction (deposit or withdrawal)" }
+      },
+      "required": ["id", "date", "coinName", "amount", "network", "createdAt"]
+    },
+    "UserSettings": {
+      "title": "User Configurations",
+      "description": "User specific spreadsheet linkage configurations",
+      "type": "object",
+      "properties": {
+        "syncState": {
+          "type": "object",
+          "description": "Google Sheets Synchronization structure"
+        }
+      }
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "UserSettings",
+      "description": "Contains user spreadsheet details"
+    },
+    "users/{userId}/rialEntries/{entryId}": {
+      "schema": "RialEntry",
+      "description": "Contains physical Rial transaction lists for user"
+    },
+    "users/{userId}/cryptoEntries/{cryptoId}": {
+      "schema": "CryptoEntry",
+      "description": "Contains physical Cryptocurrency transaction lists for user"
+    }
+  }
+}

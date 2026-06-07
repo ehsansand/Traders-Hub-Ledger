@@ -1,0 +1,6 @@
+{
+  "name": "Traders Hub Ledger",
+  "description": "A professional and user-friendly ledger for tracking Rial and Crypto deposits with Google Sheets integration and Excel/PDF exports.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
